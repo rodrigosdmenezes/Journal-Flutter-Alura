@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_webapi_first_course/helpers/logout.dart';
 import 'package:flutter_webapi_first_course/helpers/weekday.dart';
 import 'package:flutter_webapi_first_course/models/journal.dart';
 import 'package:flutter_webapi_first_course/screens/add_journal_screen/add_journal_screen.dart';
 import 'package:flutter_webapi_first_course/screens/commom/confirmation_dialog.dart';
+import 'package:flutter_webapi_first_course/screens/commom/exception_dialog.dart';
 import 'package:flutter_webapi_first_course/services/journal_service.dart';
 import 'package:uuid/uuid.dart';
 
@@ -11,13 +15,15 @@ class JournalCard extends StatelessWidget {
   final DateTime showedDate;
   final Function refreshFunction;
   final int userId;
-  const JournalCard({
-    Key? key,
-    this.journal,
-    required this.showedDate,
-    required this.refreshFunction,
-    required this.userId
-  }) : super(key: key);
+  final String token;
+  const JournalCard(
+      {Key? key,
+      this.journal,
+      required this.showedDate,
+      required this.refreshFunction,
+      required this.userId,
+      required this.token})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -164,15 +170,27 @@ class JournalCard extends StatelessWidget {
         content:
             "Deseja realmente remover o diario do dia ${WeekDay(journal!.createdAt)}",
         confirmButtonText: "Remover",
-      ).then((value) {
-        if (value) {
-          service.delete(journal!.id).then((value) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Removido com sucesso.")));
-          });
-        }
-      });
-      refreshFunction();
+      ).then(
+        (value) {
+          if (value) {
+            service.delete(journal!.id, token).then(
+              (value) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Removido com sucesso."),
+                  ),
+                );
+              },
+            );
+            refreshFunction();
+          }
+        },
+      ).catchError((error) {
+        logout(context);
+      }, test: (error) => error is TokenValidException).catchError((error) {
+        var innerError = error as HttpException;
+        showExceptionDialog(context, content: error.message);
+      }, test: (error) => error is HttpException);
     }
   }
 }

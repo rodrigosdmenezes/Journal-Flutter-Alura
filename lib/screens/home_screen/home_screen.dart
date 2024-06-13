@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_webapi_first_course/helpers/logout.dart';
+import 'package:flutter_webapi_first_course/screens/commom/exception_dialog.dart';
 import 'package:flutter_webapi_first_course/screens/home_screen/widgets/home_screen_list.dart';
 import 'package:flutter_webapi_first_course/services/journal_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _listScrollController = ScrollController();
   final JournalService _journalService = JournalService();
   int? userId;
+  String? userToken;
 
   @override
   void initState() {
@@ -51,7 +56,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: (userId != null)
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            ListTile(
+              onTap: () {
+                logout(context);
+              },
+              title: const Text("Sair"),
+              leading: const Icon(Icons.logout),
+            ),
+          ],
+        ),
+      ),
+      body: (userId != null && userToken != null)
           ? ListView(
               controller: _listScrollController,
               children: generateListJournalCards(
@@ -60,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 database: database,
                 refreshFunction: refresh,
                 userId: userId!,
+                token: userToken!,
               ),
             )
           : const Center(
@@ -69,30 +88,38 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void refresh() async {
-    SharedPreferences.getInstance().then((prefs) {
-      String? token = prefs.getString('token');
-      String? email = prefs.getString('email');
-      int? id = prefs.getInt("id");
+    SharedPreferences.getInstance().then(
+      (prefs) {
+        String? token = prefs.getString('token');
+        String? email = prefs.getString('email');
+        int? id = prefs.getInt("id");
 
-      if (token != null && email != null && id != null) {
-        setState(() {
-          userId = id;
-        });
-        _journalService
-            .getAll(id: id.toString(), token: token)
-            .then((List<Journal> listJournal) {
+        if (token != null && email != null && id != null) {
           setState(() {
-            database = {};
-
-            for (Journal journal in listJournal) {
-              database[journal.id] = journal;
-            }
-            ;
+            userId = id;
+            userToken = token;
           });
-        });
-      } else {
-        Navigator.pushReplacementNamed(context, 'login');
-      }
-    });
+          _journalService
+              .getAll(id: id.toString(), token: userToken!)
+              .then((List<Journal> listJournal) {
+            setState(() {
+              database = {};
+
+              for (Journal journal in listJournal) {
+                database[journal.id] = journal;
+              }
+              ;
+            });
+          });
+        } else {
+          Navigator.pushReplacementNamed(context, 'login');
+        }
+      },
+    ).catchError((error) {
+      logout(context);
+    }, test: (error) => error is TokenValidException).catchError((error) {
+      var innerError = error as HttpException;
+      showExceptionDialog(context, content: error.message);
+    }, test: (error) => error is HttpException);
   }
 }

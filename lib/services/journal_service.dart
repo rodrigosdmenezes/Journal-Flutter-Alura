@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_webapi_first_course/services/http_interceptors.dart';
+import 'package:flutter_webapi_first_course/services/webclient.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_interceptor/http/http.dart';
 
@@ -8,12 +10,10 @@ import '../models/journal.dart';
 
 class JournalService {
   // Consiga seu IP usando o comando "ipconfig" no Windows ou "ifconfig" no Linux.
-  static const String url = "https://192.168.18.6:3000/";
   static const String resource = "journals/";
 
-  http.Client client = InterceptedClient.build(
-    interceptors: [LoggingInterceptor()],
-  );
+  String url = WebClient.url;
+  http.Client client = WebClient().client;
 
   String getURL() {
     return "$url$resource";
@@ -35,11 +35,15 @@ class JournalService {
       body: journalJSON,
     );
 
-    if (response.statusCode == 201) {
-      return true;
+    if (response.statusCode != 201) {
+      if (json.decode(response.body) == "jwt expired") {
+        throw TokenValidException();
+      }
+
+      throw HttpException(response.body);
     }
 
-    return false;
+    return true;
   }
 
   Future<bool> edit(String id, Journal journal, String token) async {
@@ -52,14 +56,21 @@ class JournalService {
       },
       body: journalJSON,
     );
-    if (response.statusCode == 200) {
-      return true;
+    if (response.statusCode != 200) {
+      if (json.decode(response.body) == "jwt expired") {
+        throw TokenValidException();
+      }
+
+      throw HttpException(response.body);
     }
-    return false;
+    return true;
   }
 
-  Future<bool> delete(String id) async {
-    http.Response response = await http.delete(Uri.parse("${getURL()}$id"));
+  Future<bool> delete(String id, String token) async {
+    http.Response response = await http.delete(
+      Uri.parse("${getURL()}$id"),
+      headers: {"Authorization": "Bearer $token"},
+    );
     if (response.statusCode == 200) {
       return true;
     }
@@ -73,8 +84,11 @@ class JournalService {
         headers: {"Authorization": "Bearer $token"});
 
     if (response.statusCode != 200) {
-      //TODO: Criar uma exceção personalizada
-      throw Exception();
+      if (json.decode(response.body) == "jwt expired") {
+        throw TokenValidException();
+      }
+
+      throw HttpException(response.body);
     }
 
     List<Journal> result = [];
@@ -87,3 +101,5 @@ class JournalService {
     return result;
   }
 }
+
+class TokenValidException implements Exception {}

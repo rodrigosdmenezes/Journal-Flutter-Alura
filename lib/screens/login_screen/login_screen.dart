@@ -1,16 +1,18 @@
-import 'dart:developer';
+import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_webapi_first_course/screens/commom/confirmation_dialog.dart';
+import 'package:flutter_webapi_first_course/screens/commom/exception_dialog.dart';
 import 'package:flutter_webapi_first_course/services/auth_service.dart';
 
 class LoginScreen extends StatelessWidget {
   LoginScreen({Key? key}) : super(key: key);
 
-  TextEditingController _emailcontroller = TextEditingController();
-  TextEditingController _passcontroller = TextEditingController();
+  final TextEditingController _emailcontroller = TextEditingController();
+  final TextEditingController _passcontroller = TextEditingController();
 
-  AuthService service = AuthService();
+  final AuthService service = AuthService();
 
   @override
   Widget build(BuildContext context) {
@@ -74,13 +76,15 @@ class LoginScreen extends StatelessWidget {
     String email = _emailcontroller.text;
     String password = _passcontroller.text;
 
-    try {
-      await service.login(email: email, password: password).then((resultLogin) {
+    service.login(email: email, password: password).then(
+      (resultLogin) {
         if (resultLogin) {
           Navigator.pushReplacementNamed(context, "home");
         }
-      });
-    } on UserNotFindException {
+      },
+    ).catchError((error) {
+      showExceptionDialog(context, content: error.message);
+    }, test: (error) => error is HttpException).catchError((error) {
       showConfirmationDialog(
         context,
         content:
@@ -97,6 +101,8 @@ class LoginScreen extends StatelessWidget {
           });
         }
       });
-    }
+    }, test: (error) => error is UserNotFindException).catchError((error) {
+      showExceptionDialog(context, content: "Tente novamente mais tarde");
+    }, test: (error) => error is TimeoutException);
   }
 }
