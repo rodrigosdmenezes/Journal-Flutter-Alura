@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_webapi_first_course/screens/home_screen/widgets/home_screen_list.dart';
 import 'package:flutter_webapi_first_course/services/journal_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/journal.dart';
 
@@ -23,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final ScrollController _listScrollController = ScrollController();
   final JournalService _journalService = JournalService();
+  int? userId;
 
   @override
   void initState() {
@@ -49,30 +51,47 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: ListView(
-        controller: _listScrollController,
-        children: generateListJournalCards(
-          windowPage: windowPage,
-          currentDay: currentDay,
-          database: database,
-          refreshFunction: refresh,
-        ),
-      ),
+      body: (userId != null)
+          ? ListView(
+              controller: _listScrollController,
+              children: generateListJournalCards(
+                windowPage: windowPage,
+                currentDay: currentDay,
+                database: database,
+                refreshFunction: refresh,
+                userId: userId!,
+              ),
+            )
+          : const Center(
+              child: CircularProgressIndicator(),
+            ),
     );
   }
 
   void refresh() async {
-    List<Journal> listJournal = await _journalService.getAll();
+    SharedPreferences.getInstance().then((prefs) {
+      String? token = prefs.getString('token');
+      String? email = prefs.getString('email');
+      int? id = prefs.getInt("id");
 
-    setState(() {
-      database = {};
-      for (Journal journal in listJournal) {
-        database[journal.id] = journal;
-      }
+      if (token != null && email != null && id != null) {
+        setState(() {
+          userId = id;
+        });
+        _journalService
+            .getAll(id: id.toString(), token: token)
+            .then((List<Journal> listJournal) {
+          setState(() {
+            database = {};
 
-      if (_listScrollController.hasClients) {
-        final double position = _listScrollController.position.maxScrollExtent;
-        _listScrollController.jumpTo(position);
+            for (Journal journal in listJournal) {
+              database[journal.id] = journal;
+            }
+            ;
+          });
+        });
+      } else {
+        Navigator.pushReplacementNamed(context, 'login');
       }
     });
   }
